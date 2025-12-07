@@ -1,0 +1,241 @@
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego del Impostor</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1a2e;
+            color: #eee;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .game-container {
+            background-color: #16213e;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+        }
+        h1 {
+            color: #e94560;
+            margin-bottom: 20px;
+        }
+        .setup-screen, .game-screen, .voting-screen, .result-screen {
+            display: none;
+        }
+        .active-screen {
+            display: block;
+        }
+        input[type="text"], input[type="number"], button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 8px;
+            border: 1px solid #0f3460;
+            background-color: #0f3460;
+            color: #eee;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #e94560;
+            border-color: #e94560;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #c23651;
+        }
+        button:disabled {
+            background-color: #53354a;
+            cursor: not-allowed;
+        }
+        .player-info {
+            background-color: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        .impostor-info {
+            color: #f39c12;
+        }
+        .crewmate-info {
+            color: #3498db;
+        }
+        .clues-list {
+            list-style-type: none;
+            padding: 0;
+            text-align: left;
+            background-color: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .clues-list li {
+            padding: 8px;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        .clues-list li:last-child {
+            border-bottom: none;
+        }
+        .player-list-vote {
+            list-style-type: none;
+            padding: 0;
+        }
+        .player-list-vote li {
+            background-color: #0f3460;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .player-list-vote li:hover {
+            background-color: #e94560;
+        }
+        .player-list-vote li.selected {
+            background-color: #c23651;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h1>Juego del Impostor</h1>
+
+        <!-- Pantalla 1: Configuración -->
+        <div id="setup" class="setup-screen active-screen">
+            <h2>Configuración de la Partida</h2>
+            <label for="palabra">Palabra secreta para los tripulantes:</label>
+            <input type="text" id="palabra" placeholder="Ej: Agua">
+            <label for="num-jugadores">Número de jugadores (máx. 8):</label>
+            <input type="number" id="num-jugadores" value="5" min="3" max="8">
+            <button onclick="iniciarJuego()">Iniciar Partida</button>
+        </div>
+
+        <!-- Pantalla 2: Rol y Palabra (para cada jugador simulado) -->
+        <div id="game" class="game-screen">
+            <div id="player-info" class="player-info"></div>
+            <h3>Tu turno para dar una pista:</h3>
+            <input type="text" id="pista-input" placeholder="Escribe una palabra relacionada...">
+            <button id="enviar-pista-btn" onclick="enviarPista()">Enviar Pista</button>
+        </div>
+
+        <!-- Pantalla 3: Votación -->
+        <div id="voting" class="voting-screen">
+            <h2>¡Hora de Votar!</h2>
+            <p>A continuación, las pistas de todos. ¿Quién es el impostor?</p>
+            <ul id="clues-list" class="clues-list"></ul>
+            <h3>Selecciona al sospechoso:</h3>
+            <ul id="player-list-vote" class="player-list-vote"></ul>
+            <button onclick="procesarVoto()">Confirmar Voto</button>
+        </div>
+
+        <!-- Pantalla 4: Resultados -->
+        <div id="result" class="result-screen">
+            <h2 id="result-title"></h2>
+            <p id="result-details"></p>
+            <button onclick="reiniciarJuego()">Jugar de Nuevo</button>
+        </div>
+    </div>
+
+<script>
+    // --- ESTADO DEL JUEGO ---
+    let gameState = {
+        palabraSecreta: '',
+        impostorIndex: -1,
+        jugadores: [],
+        pistas: [],
+        jugadorActual: 0,
+        votoJugadorActual: -1,
+        votos: []
+    };
+
+    // --- FUNCIONES DE PANTALLA ---
+    function showScreen(screenId) {
+        document.querySelectorAll('.setup-screen, .game-screen, .voting-screen, .result-screen').forEach(screen => {
+            screen.classList.remove('active-screen');
+        });
+        document.getElementById(screenId).classList.add('active-screen');
+    }
+
+    // --- LÓGICA DEL JUEGO ---
+
+    function iniciarJuego() {
+        const palabraInput = document.getElementById('palabra').value.trim();
+        const numJugadoresInput = parseInt(document.getElementById('num-jugadores').value);
+
+        if (!palabraInput || numJugadoresInput < 3 || numJugadoresInput > 8) {
+            alert('Por favor, introduce una palabra válida y un número de jugadores entre 3 y 8.');
+            return;
+        }
+
+        // Inicializar estado
+        gameState.palabraSecreta = palabraInput;
+        gameState.jugadores = Array.from({ length: numJugadoresInput }, (_, i) => `Jugador ${i + 1}`);
+        gameState.impostorIndex = Math.floor(Math.random() * numJugadoresInput);
+        gameState.pistas = [];
+        gameState.votos = new Array(numJugadoresInput).fill(-1);
+        gameState.jugadorActual = 0;
+
+        // Empezar el turno del primer jugador
+        mostrarTurnoJugador();
+    }
+
+    function mostrarTurnoJugador() {
+        if (gameState.jugadorActual >= gameState.jugadores.length) {
+            // Todos han dado su pista, pasar a la votación
+            iniciarVotacion();
+            return;
+        }
+
+        showScreen('game');
+        const jugador = gameState.jugadores[gameState.jugadorActual];
+        const esImpostor = gameState.jugadorActual === gameState.impostorIndex;
+        const infoDiv = document.getElementById('player-info');
+        
+        if (esImpostor) {
+            infoDiv.innerHTML = `<span class="impostor-info">Eres <strong>${jugador}</strong> y tu rol es <strong>IMPOSTOR</strong>. No sabes la palabra.</span>`;
+        } else {
+            infoDiv.innerHTML = `<span class="crewmate-info">Eres <strong>${jugador}</strong> y tu rol es <strong>TRIPULANTE</strong>. La palabra es: <strong>${gameState.palabraSecreta}</strong></span>`;
+        }
+
+        // Limpiar input anterior
+        document.getElementById('pista-input').value = '';
+        document.getElementById('pista-input').focus();
+    }
+
+    function enviarPista() {
+        const pistaInput = document.getElementById('pista-input').value.trim();
+        if (!pistaInput) {
+            alert('Debes escribir una pista.');
+            return;
+        }
+
+        // Guardar la pista del impostor como un guion para ocultarla
+        const pistaAMostrar = (gameState.jugadorActual === gameState.impostorIndex) ? "???" : pistaInput;
+
+        gameState.pistas.push({
+            jugador: gameState.jugadores[gameState.jugadorActual],
+            texto: pistaAMostrar,
+            textoReal: pistaInput // Guardamos la pista real para el resultado final
+        });
+
+        // Pasar al siguiente jugador
+        gameState.jugadorActual++;
+        mostrarTurnoJugador();
+    }
+
+    function iniciarVotacion() {
+        showScreen('voting
